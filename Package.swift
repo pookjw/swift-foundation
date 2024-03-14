@@ -1,4 +1,4 @@
-// swift-tools-version: 5.9
+// swift-tools-version: 5.10
 // The swift-tools-version declares the minimum version of Swift required to build this package.
 
 import PackageDescription
@@ -54,7 +54,7 @@ let package = Package(
             exact: "0.0.5"),
         .package(
             url: "https://github.com/apple/swift-syntax.git",
-            from: "509.0.2")
+            from: "510.0.1")
     ],
     targets: [
         // Foundation (umbrella)
