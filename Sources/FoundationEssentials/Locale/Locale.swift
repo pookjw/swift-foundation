@@ -209,6 +209,12 @@ public struct Locale : Hashable, Equatable, Sendable {
         _locale.currencySymbolDisplayName(for: currencySymbol)
     }
     
+#if !FOUNDATION_FRAMEWORK
+    @_spi(SwiftCorelibsFoundation) public func _localizedString(forCurrencySymbol currencySymbol: String) -> String? {
+        localizedString(forCurrencySymbol: currencySymbol)
+    }
+#endif
+    
     /// Returns a localized string for a specified ICU collation identifier.
     ///
     /// For example, in the "en" locale, the result for `"phonebook"` is `"Phonebook Sort Order"`.
@@ -292,8 +298,10 @@ public struct Locale : Hashable, Equatable, Sendable {
     /// Returns the calendar for the locale, or the Gregorian calendar as a fallback.
     public var calendar: Calendar {
         var cal = _locale.calendar
-        // TODO: This is a fairly expensive operation, because it recreates the Calendar's backing ICU object. However, we can't cache the value or we risk creating a retain cycle between _Calendar/_Locale. We'll need to sort out some way around this.
-        // TODO: Calendar doesn't store a Locale anymore!
+        // This is a fairly expensive operation, because it recreates the Calendar's backing ICU object.
+        // However, we can't cache `struct Calendar` because it would create a retain cycle between _Calendar/_Locale:
+        // struct Calendar -> inner _Calendar: any _CalendarProtocol -> struct Locale -> inner _Locale: any _LocaleProtocol -> struct Calendar...
+        // _Calendar holds a Locale for performance reasons
         cal.locale = self
         return cal
     }
@@ -303,6 +311,12 @@ public struct Locale : Hashable, Equatable, Sendable {
     package var _calendarIdentifier: Calendar.Identifier {
         _locale.calendarIdentifier
     }
+    
+#if !FOUNDATION_FRAMEWORK
+    @_spi(SwiftCorelibsFoundation) public var __calendarIdentifier: Calendar.Identifier {
+        _calendarIdentifier
+    }
+#endif
 
     /// Returns the collation identifier for the locale, or nil if it has none.
     ///

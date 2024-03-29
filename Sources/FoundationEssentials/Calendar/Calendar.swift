@@ -131,6 +131,12 @@ public struct Calendar : Hashable, Equatable, Sendable {
             case .ethiopicAmeteAlem: return "ethiopic-amete-alem"
             }
         }
+        
+#if !FOUNDATION_FRAMEWORK        
+        @_spi(SwiftCorelibsFoundation) public var _cfCalendarIdentifier: String {
+            cfCalendarIdentifier
+        }
+#endif
     }
 
     /// Bitwise set of which components in a `DateComponents` are interesting to use. More efficient than`Set<Component>`.
@@ -327,7 +333,7 @@ public struct Calendar : Hashable, Equatable, Sendable {
     }
 
     /// For use by `NSCoding` implementation in `NSCalendar` and `Codable` for `Calendar` only.
-    internal init(identifier: Identifier, locale: Locale, timeZone: TimeZone?, firstWeekday: Int?, minimumDaysInFirstWeek: Int?, gregorianStartDate: Date?) {
+    internal init(identifier: Calendar.Identifier, locale: Locale, timeZone: TimeZone?, firstWeekday: Int?, minimumDaysInFirstWeek: Int?, gregorianStartDate: Date?) {
         _calendar = CalendarCache.cache.fixed(identifier: identifier, locale: locale, timeZone: timeZone, firstWeekday: firstWeekday, minimumDaysInFirstWeek: minimumDaysInFirstWeek, gregorianStartDate: gregorianStartDate)
     }
 
@@ -360,7 +366,7 @@ public struct Calendar : Hashable, Equatable, Sendable {
     /// The locale of the calendar.
     public var locale : Locale? {
         get {
-            _calendar.locale
+            _calendar.locale ?? Locale(identifier: "")
         }
         set {
             guard newValue != _calendar.locale else {
@@ -1059,7 +1065,7 @@ public struct Calendar : Hashable, Equatable, Sendable {
     }
 
     /// A hint to the search algorithm to control the method used for searching for dates.
-    public enum MatchingPolicy : Sendable {
+    public enum MatchingPolicy : Sendable, Equatable {
         /// If there is no matching time before the end of the next instance of the next higher component to the highest specified component in the `DateComponents` argument, the algorithm will return the next existing time which exists.
         ///
         /// For example, during a daylight saving transition there may be no 2:37am. The result would then be 3:00am, if that does exist.
@@ -1477,6 +1483,39 @@ package struct WeekendRange: Equatable, Hashable {
     }
 }
 
+@available(FoundationPreview 0.4, *)
+extension Calendar.MatchingPolicy: Codable {
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        switch try container.decode(Int.self) {
+        case 0:
+            self = .nextTime
+        case 1:
+            self = .nextTimePreservingSmallerComponents
+        case 2:
+            self = .previousTimePreservingSmallerComponents
+        case 3:
+            self = .strict
+        default: 
+            throw DecodingError.dataCorrupted(.init(codingPath: decoder.codingPath, debugDescription: "Unknown MatchingPolicy"))
+        }
+    }
+    
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        switch self {
+        case .nextTime:
+            try container.encode(0)
+        case .nextTimePreservingSmallerComponents:
+            try container.encode(1)
+        case .previousTimePreservingSmallerComponents:
+            try container.encode(2)
+        case .strict:
+            try container.encode(3)
+        }
+    }
+}
+
 // MARK: - Bridging
 #if FOUNDATION_FRAMEWORK
 @available(macOS 10.10, iOS 8.0, watchOS 2.0, tvOS 9.0, *)
@@ -1518,4 +1557,5 @@ extension NSCalendar : _HasCustomAnyHashableRepresentation {
         return AnyHashable(self as Calendar)
     }
 }
+
 #endif // FOUNDATION_FRAMEWORK

@@ -67,7 +67,7 @@ enum ResolvedDateComponents {
     case weekOfMonth(year: Int, month: Int, weekOfMonth: Int, weekday: Int?)
 
     // Pick the year field between yearForWeekOfYear and year and resovles era
-    static func yearMonth(forDateComponent components: DateComponents) -> (year: Int, month: Int) {
+    static func yearOrYearForWOYAdjustingEra(from components: DateComponents) -> (year: Int, month: Int) {
         var rawYear: Int
         // Don't adjust for era if week is also specified
         var adjustEra = true
@@ -115,19 +115,25 @@ enum ResolvedDateComponents {
     }
 
     init(dateComponents components: DateComponents) {
-        var (year, month) = Self.yearMonth(forDateComponent: components)
+        let (year, month) = Self.yearOrYearForWOYAdjustingEra(from: components)
         let minWeekdayOrdinal = 1
 
-        // TODO: Check day of year value here
         if let d = components.day {
-            if components.yearForWeekOfYear != nil, let weekOfYear = components.weekOfYear {
-                if components.month == nil && weekOfYear >= 52 {
-                    year += 1
-                } else if weekOfYear == 1 {
-                    year -= 1
+            let adjustedYear: Int
+            if components.yearForWeekOfYear != nil, let weekOfYear = components.weekOfYear, let componentsMonth = components.month {
+                if componentsMonth == 1 && weekOfYear >= 52 {
+                    // We're in the last week of the year, so the actual year is the next one
+                    adjustedYear = year + 1
+                } else if componentsMonth > 1 && weekOfYear == 1 {
+                    adjustedYear = year - 1
+                } else {
+                    adjustedYear = year
                 }
+
+            } else {
+                adjustedYear = year
             }
-            self = .day(year: year, month: month, day: d, weekOfYear: components.weekOfYear)
+            self = .day(year: adjustedYear, month: month, day: d, weekOfYear: components.weekOfYear)
         } else if let woy = components.weekOfYear, let weekday = components.weekday {
             self = .weekOfYear(year: year, weekOfYear: woy, weekday: weekday)
         } else if let wom = components.weekOfMonth, let weekday = components.weekday {
@@ -198,14 +204,7 @@ internal final class _CalendarGregorian: _CalendarProtocol, @unchecked Sendable 
             self.gregorianStartDate = Date(timeIntervalSince1970: -12219292800) // 1582-10-15T00:00:00Z
         }
 
-        // We do not store the Locale here, as Locale stores a Calendar. We only keep the values we need that affect Calendar's operation.
-        if let locale {
-            localeIdentifier = locale.identifier
-            localePrefs = locale.prefs
-        } else {
-            localeIdentifier = ""
-            localePrefs = nil
-        }
+        self.locale = locale
 
         if let firstWeekday, (firstWeekday >= 1 && firstWeekday <= 7) {
             _firstWeekday = firstWeekday
@@ -224,20 +223,8 @@ internal final class _CalendarGregorian: _CalendarProtocol, @unchecked Sendable 
     var identifier: Calendar.Identifier {
         .gregorian
     }
-    // Custom user preferences of any locale used (current locale or current locale imitation only). We need to store this to correctly rebuild a Locale that has been stored inside Calendar as an identifier.
-    private var localePrefs: LocalePreferences?
 
-    var locale: Locale? {
-        get {
-            Locale(identifier: localeIdentifier, preferences: localePrefs)
-        }
-        set {
-            localeIdentifier = newValue?.identifier ?? ""
-            localePrefs = newValue?.prefs
-        }
-    }
-
-    var localeIdentifier: String
+    var locale: Locale?
 
     var timeZone: TimeZone
 
@@ -275,6 +262,7 @@ internal final class _CalendarGregorian: _CalendarProtocol, @unchecked Sendable 
             if let _minimumDaysInFirstWeek {
                 return _minimumDaysInFirstWeek
             } else if let locale {
+                // Do not call into `locale` if the value is straightforward
                 return locale.minimumDaysInFirstWeek
             } else {
                 return 1
@@ -920,7 +908,7 @@ internal final class _CalendarGregorian: _CalendarProtocol, @unchecked Sendable 
         } catch {
             preconditionFailure("Unrecognized calendar error")
         }
-        
+
         return result
     }
 

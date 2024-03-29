@@ -181,7 +181,7 @@ class DataIOTests : XCTestCase {
         // Data doesn't have a direct API to write with attributes, but our I/O code has it. Use it via @testable interface here.
         
         let writeAttrs: [String : Data] = [FileAttributeKey.hfsCreatorCode.rawValue : "abcd".data(using: .ascii)!]
-        try writeDataToFile(path: .url(url), data: writeData, options: [], attributes: writeAttrs)
+        try writeToFile(path: .url(url), data: writeData, options: [], attributes: writeAttrs)
         
         // Verify attributes
         var readAttrs: [String : Data] = [:]
@@ -203,6 +203,27 @@ class DataIOTests : XCTestCase {
         
         cleanup(at: url)
     }
+    
+#if FOUNDATION_FRAMEWORK
+    // String(contentsOf:) is not available outside the framework yet
+    func test_emptyFileString() {
+        let data = Data()
+        let url = testURL()
+        
+        do {
+            try data.write(to: url)
+            let readString = try String(contentsOf: url)
+            XCTAssertEqual(readString, "")
+            
+            let readStringWithEncoding = try String(contentsOf: url, encoding: String._Encoding.utf8)
+            XCTAssertEqual(readStringWithEncoding, "")
+            
+            cleanup(at: url)
+        } catch {
+            XCTFail("Could not read file: \(error)")
+        }
+    }
+#endif
     
     func test_largeFile() throws {
 #if !os(watchOS)
